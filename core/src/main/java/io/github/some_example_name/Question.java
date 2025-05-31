@@ -1,0 +1,13 @@
+package io.github.some_example_name;
+
+public class Question {
+    public String text;
+    public String[] options;
+    public int correctAnswerIndex;
+
+    public Question(String text, String[] options, int correctAnswerIndex) {
+        this.text = text;
+        this.options = options;
+        this.correctAnswerIndex = correctAnswerIndex;
+    }
+}
