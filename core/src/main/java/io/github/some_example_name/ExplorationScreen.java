@@ -37,6 +37,8 @@ public class ExplorationScreen extends ScreenAdapter {
     public static final float VIEWPORT_WIDTH_TILES = 10f;  // Ex: 15 tiles de largura
     public static final float VIEWPORT_HEIGHT_TILES = 8f; // Ex: 10 tiles de altura
 
+    private boolean playerFacingRight = true;
+
     public ExplorationScreen(final MyGdxGame game) {
         this.game = game;
 
@@ -105,20 +107,28 @@ public class ExplorationScreen extends ScreenAdapter {
     }
 
     private void tryMove(int dx, int dy) {
-        if (isMoving) return;
+    if (isMoving) return;
 
-        int nextLogicalX = game.playerGridX + dx;
-        int nextLogicalY = game.playerGridY + dy;
+    int nextLogicalX = game.playerGridX + dx;
+    int nextLogicalY = game.playerGridY + dy;
 
-        if (nextLogicalX >= 0 && nextLogicalX < MyGdxGame.MAP_WIDTH_TILES &&
-            nextLogicalY >= 0 && nextLogicalY < MyGdxGame.MAP_HEIGHT_TILES &&
-            game.mapData[MyGdxGame.MAP_HEIGHT_TILES - 1 - nextLogicalY][nextLogicalX] != 1) {
-            isMoving = true;
-            targetGridX = nextLogicalX;
-            targetGridY = nextLogicalY;
-            animationTimer = 0f;
-        }
+    // Atualizar a direção do personagem
+    if (dx > 0) { // Movendo para a direita
+        playerFacingRight = true;
+    } else if (dx < 0) { // Movendo para a esquerda
+        playerFacingRight = false;
     }
+    // Se dx == 0 (movendo para cima ou para baixo), a direção horizontal não muda.
+
+    if (nextLogicalX >= 0 && nextLogicalX < MyGdxGame.MAP_WIDTH_TILES &&
+        nextLogicalY >= 0 && nextLogicalY < MyGdxGame.MAP_HEIGHT_TILES &&
+        game.mapData[MyGdxGame.MAP_HEIGHT_TILES - 1 - nextLogicalY][nextLogicalX] != 1) {
+        isMoving = true;
+        targetGridX = nextLogicalX;
+        targetGridY = nextLogicalY;
+        animationTimer = 0f;
+    }
+}
 
     private void updatePlayerMovement(float delta) {
         if (isMoving) {
@@ -182,58 +192,50 @@ public class ExplorationScreen extends ScreenAdapter {
         }
     }
 
-    @Override
-    public void render(float delta) {
-        handleInput(delta);
-        updatePlayerMovement(delta); // Isso agora também chama updateCameraPosition()
+    // Dentro do método render(float delta) em ExplorationScreen
 
-        // camera.update(); // Já é chamado dentro de updateCameraPosition()
-        game.batch.setProjectionMatrix(camera.combined);
+@Override
+public void render(float delta) {
+    handleInput(delta);
+    updatePlayerMovement(delta);
 
-        Gdx.gl.glClearColor(0.1f, 0.1f, 0.1f, 1);
-        Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
+    game.batch.setProjectionMatrix(camera.combined);
 
-        game.batch.begin();
+    Gdx.gl.glClearColor(0.1f, 0.1f, 0.1f, 1);
+    Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
 
-        float playerOffsetX = (MyGdxGame.TILE_SIZE - RENDERED_PLAYER_SIZE) / 2f;
-        float playerOffsetY = (MyGdxGame.TILE_SIZE - RENDERED_PLAYER_SIZE) / 2f;
-        float enemyIconOffsetX = (MyGdxGame.TILE_SIZE - RENDERED_ENEMY_ICON_SIZE) / 2f;
-        float enemyIconOffsetY = (MyGdxGame.TILE_SIZE - RENDERED_ENEMY_ICON_SIZE) / 2f;
+    game.batch.begin();
+
+    float playerOffsetX = (MyGdxGame.TILE_SIZE - RENDERED_PLAYER_SIZE) / 2f;
+    float playerOffsetY = (MyGdxGame.TILE_SIZE - RENDERED_PLAYER_SIZE) / 2f;
+    // ... (código de renderização do mapa como antes) ...
 
         // Renderizar o mapa
         // Otimização simples: renderizar apenas tiles que podem estar visíveis
-        // Calcular a faixa de tiles visíveis com base na posição e tamanho da câmera/viewport
-        int startX = MathUtils.floor((camera.position.x - viewport.getWorldWidth() / 2f) / MyGdxGame.TILE_SIZE) -1; // -1 para margem
-        int endX = MathUtils.ceil((camera.position.x + viewport.getWorldWidth() / 2f) / MyGdxGame.TILE_SIZE) +1;   // +1 para margem
-        int startY_mapArray = MathUtils.floor((camera.position.y - viewport.getWorldHeight() / 2f) / MyGdxGame.TILE_SIZE) -1;
-        int endY_mapArray = MathUtils.ceil((camera.position.y + viewport.getWorldHeight() / 2f) / MyGdxGame.TILE_SIZE) +1;
+        int startX = MathUtils.floor((camera.position.x - viewport.getWorldWidth() / 2f) / MyGdxGame.TILE_SIZE) -1;
+        int endX = MathUtils.ceil((camera.position.x + viewport.getWorldWidth() / 2f) / MyGdxGame.TILE_SIZE) +1;
 
-        // Clamp para os limites do mapa
-        startX = Math.max(0, startX);
-        endX = Math.min(MyGdxGame.MAP_WIDTH_TILES, endX);
-        // Para o array mapData, as coordenadas Y são invertidas e precisamos traduzir
-        // as coordenadas Y visuais (screenY) para os índices do array mapData.
-        // startY_mapArray e endY_mapArray já são para coordenadas de tela (Y cresce pra cima)
-        // Então, ao iterar no mapData, precisamos converter.
-
-        for (int mapY_idx = 0; mapY_idx < MyGdxGame.MAP_HEIGHT_TILES; mapY_idx++) { // Itera sobre as linhas do array mapData
-            float screenTileY = (MyGdxGame.MAP_HEIGHT_TILES - 1 - mapY_idx) * MyGdxGame.TILE_SIZE; // Y na tela para esta linha do array
-            // Checa se esta linha de tiles está dentro da faixa vertical visível
+        for (int mapY_idx = 0; mapY_idx < MyGdxGame.MAP_HEIGHT_TILES; mapY_idx++) {
+            float screenTileY = (MyGdxGame.MAP_HEIGHT_TILES - 1 - mapY_idx) * MyGdxGame.TILE_SIZE;
             if (screenTileY + MyGdxGame.TILE_SIZE < camera.position.y - viewport.getWorldHeight() / 2f ||
                 screenTileY > camera.position.y + viewport.getWorldHeight() / 2f) {
-                continue; // Pula esta linha se estiver fora da visão vertical
+                continue;
             }
 
-            for (int mapX_idx = startX; mapX_idx < endX; mapX_idx++) { // Itera sobre as colunas visíveis
-                int tileType = game.mapData[mapY_idx][mapX_idx]; // mapData[linha_array][coluna_array]
-                float screenTileX = mapX_idx * MyGdxGame.TILE_SIZE;
-                // screenTileY já calculado acima
+            for (int mapX_idx = startX; mapX_idx < endX; mapX_idx++) {
+                if (mapX_idx < 0 || mapX_idx >= MyGdxGame.MAP_WIDTH_TILES) continue; // Segurança extra para bounds
 
-                if (tileType == 1) { // Parede
+                int tileType = game.mapData[mapY_idx][mapX_idx];
+                float screenTileX = mapX_idx * MyGdxGame.TILE_SIZE;
+
+                if (tileType == 1) {
                     game.batch.draw(wallTexture, screenTileX, screenTileY, MyGdxGame.TILE_SIZE, MyGdxGame.TILE_SIZE);
-                } else { // Chão ou Inimigo
+                } else {
                     game.batch.draw(floorTexture, screenTileX, screenTileY, MyGdxGame.TILE_SIZE, MyGdxGame.TILE_SIZE);
-                    if (tileType == 2) { // Inimigo no mapa
+                    if (tileType == 2) {
+                        // Supondo que RENDERED_ENEMY_ICON_SIZE e offsets já foram definidos
+                        float enemyIconOffsetX = (MyGdxGame.TILE_SIZE - RENDERED_ENEMY_ICON_SIZE) / 2f;
+                        float enemyIconOffsetY = (MyGdxGame.TILE_SIZE - RENDERED_ENEMY_ICON_SIZE) / 2f;
                         game.batch.draw(enemyMapIconTexture,
                                 screenTileX + enemyIconOffsetX,
                                 screenTileY + enemyIconOffsetY,
@@ -244,16 +246,29 @@ public class ExplorationScreen extends ScreenAdapter {
             }
         }
 
+    // Renderizar o jogador
+    // A textura original (playerTexture) é usada como a fonte completa.
+    int srcX = 0;
+    int srcY = 0;
+    int srcWidth = playerTexture.getWidth();
+    int srcHeight = playerTexture.getHeight();
+    boolean flipX = !playerFacingRight; // Inverte se NÃO estiver virado para a direita
+    boolean flipY = false; // Não precisamos inverter verticalmente
 
-        // Renderizar o jogador
-        game.batch.draw(playerTexture,
-                playerVisualX + playerOffsetX,
-                playerVisualY + playerOffsetY,
-                RENDERED_PLAYER_SIZE,
-                RENDERED_PLAYER_SIZE);
+    game.batch.draw(playerTexture,
+            playerVisualX + playerOffsetX,
+            playerVisualY + playerOffsetY,
+            RENDERED_PLAYER_SIZE,          // Largura de destino na tela
+            RENDERED_PLAYER_SIZE,          // Altura de destino na tela
+            srcX,                          // Ponto X de origem na textura
+            srcY,                          // Ponto Y de origem na textura
+            srcWidth,                      // Largura da região de origem na textura
+            srcHeight,                     // Altura da região de origem na textura
+            flipX,                         // Inverter horizontalmente?
+            flipY);                        // Inverter verticalmente?
 
-        game.batch.end();
-    }
+    game.batch.end();
+}
 
     @Override
     public void resize(int width, int height) {
