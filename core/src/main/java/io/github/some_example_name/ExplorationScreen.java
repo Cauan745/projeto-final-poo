@@ -6,7 +6,8 @@ import com.badlogic.gdx.ScreenAdapter;
 import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.OrthographicCamera;
 import com.badlogic.gdx.graphics.Texture;
-import com.badlogic.gdx.math.Interpolation; // Importar Interpolação
+import com.badlogic.gdx.math.Interpolation;
+import com.badlogic.gdx.math.MathUtils; // Importar MathUtils
 import com.badlogic.gdx.utils.viewport.FitViewport;
 import com.badlogic.gdx.utils.viewport.Viewport;
 
@@ -20,70 +21,102 @@ public class ExplorationScreen extends ScreenAdapter {
     private Texture wallTexture;
     private Texture enemyMapIconTexture;
 
-    // Variáveis para animação do jogador
-    private float playerVisualX;          // Posição X visual atual do jogador na tela
-    private float playerVisualY;          // Posição Y visual atual do jogador na tela
-    private int targetGridX;              // Posição X do grid para onde o jogador está se movendo
-    private int targetGridY;              // Posição Y do grid para onde o jogador está se movendo
-    private boolean isMoving = false;     // Flag para indicar se o jogador está se movendo
-    private float animationTimer = 0f;    // Timer para controlar a duração da animação
-    private static final float MOVEMENT_ANIMATION_SPEED = 0.15f; // Duração da animação em segundos (mais rápido)
+    private float playerVisualX;
+    private float playerVisualY;
+    private int targetGridX;
+    private int targetGridY;
+    private boolean isMoving = false;
+    private float animationTimer = 0f;
+    private static final float MOVEMENT_ANIMATION_SPEED = 0.15f;
+
+    private static final float EXPLORATION_SPRITE_SCALE_FACTOR = 1f;
+    private static final float RENDERED_PLAYER_SIZE = MyGdxGame.TILE_SIZE * EXPLORATION_SPRITE_SCALE_FACTOR;
+    private static final float RENDERED_ENEMY_ICON_SIZE = MyGdxGame.TILE_SIZE * EXPLORATION_SPRITE_SCALE_FACTOR;
+
+    // NOVO: Definir quantos tiles você quer que sejam visíveis na tela
+    public static final float VIEWPORT_WIDTH_TILES = 10f;  // Ex: 15 tiles de largura
+    public static final float VIEWPORT_HEIGHT_TILES = 8f; // Ex: 10 tiles de altura
 
     public ExplorationScreen(final MyGdxGame game) {
         this.game = game;
 
         camera = new OrthographicCamera();
-        viewport = new FitViewport(MyGdxGame.MAP_WIDTH_TILES * MyGdxGame.TILE_SIZE,
-                MyGdxGame.MAP_HEIGHT_TILES * MyGdxGame.TILE_SIZE,
-                camera);
-        camera.setToOrtho(false, viewport.getWorldWidth(), viewport.getWorldHeight());
+        // Configurar o viewport para o tamanho de visão desejado em pixels
+        float viewportWidthPixels = VIEWPORT_WIDTH_TILES * MyGdxGame.TILE_SIZE;
+        float viewportHeightPixels = VIEWPORT_HEIGHT_TILES * MyGdxGame.TILE_SIZE;
+
+        viewport = new FitViewport(viewportWidthPixels, viewportHeightPixels, camera);
+        // Inicialmente, a câmera pode ser centralizada no viewport,
+        // mas ela será atualizada para seguir o jogador.
+        // camera.setToOrtho(false, viewport.getWorldWidth(), viewport.getWorldHeight()); // Y-down
+        // Vamos manter o Y-up para a câmera, o desenho do mapa já lida com a inversão.
+        camera.setToOrtho(false, viewportWidthPixels, viewportHeightPixels);
+
 
         playerTexture = game.assetManager.get("player_topdown.png", Texture.class);
         floorTexture = game.assetManager.get("floor.png", Texture.class);
         wallTexture = game.assetManager.get("wall.png", Texture.class);
         enemyMapIconTexture = game.assetManager.get("enemy.png", Texture.class);
 
-        // Inicializar a posição visual do jogador baseada na posição lógica do grid
         this.playerVisualX = game.playerGridX * MyGdxGame.TILE_SIZE;
         this.playerVisualY = game.playerGridY * MyGdxGame.TILE_SIZE;
         this.targetGridX = game.playerGridX;
         this.targetGridY = game.playerGridY;
+
+        // Posicionar a câmera inicialmente no jogador
+        updateCameraPosition();
     }
 
-    private void handleInput(float delta) {
-        if (isMoving) { // Se já estiver se movendo, não processar nova entrada
-            return;
+    private void updateCameraPosition() {
+        // Centralizar a câmera na posição visual ATUAL do jogador
+        // Adicionamos TILE_SIZE / 2 para centralizar no meio do tile do jogador
+        float cameraX = playerVisualX + (MyGdxGame.TILE_SIZE / 2f);
+        float cameraY = playerVisualY + (MyGdxGame.TILE_SIZE / 2f);
+
+        // Limitar a posição da câmera para que não mostre áreas fora do mapa
+        // O centro da câmera não pode ir além de ( viewport.getWorldWidth()/2 ) das bordas do mapa.
+        float mapPixelWidth = MyGdxGame.MAP_WIDTH_TILES * MyGdxGame.TILE_SIZE;
+        float mapPixelHeight = MyGdxGame.MAP_HEIGHT_TILES * MyGdxGame.TILE_SIZE;
+
+        // MathUtils.clamp(valor, min, max)
+        camera.position.x = MathUtils.clamp(cameraX, viewport.getWorldWidth() / 2f, mapPixelWidth - viewport.getWorldWidth() / 2f);
+        camera.position.y = MathUtils.clamp(cameraY, viewport.getWorldHeight() / 2f, mapPixelHeight - viewport.getWorldHeight() / 2f);
+
+        // Se o mapa for menor que o viewport em alguma dimensão, centralizar naquela dimensão
+        if (mapPixelWidth < viewport.getWorldWidth()) {
+            camera.position.x = mapPixelWidth / 2f;
+        }
+        if (mapPixelHeight < viewport.getWorldHeight()) {
+            camera.position.y = mapPixelHeight / 2f;
         }
 
-        if (Gdx.input.isKeyJustPressed(Input.Keys.UP)) {
-            tryMove(0, 1);
-        } else if (Gdx.input.isKeyJustPressed(Input.Keys.DOWN)) {
-            tryMove(0, -1);
-        } else if (Gdx.input.isKeyJustPressed(Input.Keys.LEFT)) {
-            tryMove(-1, 0);
-        } else if (Gdx.input.isKeyJustPressed(Input.Keys.RIGHT)) {
-            tryMove(1, 0);
+        camera.update();
+    }
+
+
+    private void handleInput(float delta) {
+        if (isMoving) {
+            return;
         }
+        if (Gdx.input.isKeyJustPressed(Input.Keys.UP)) tryMove(0, 1);
+        else if (Gdx.input.isKeyJustPressed(Input.Keys.DOWN)) tryMove(0, -1);
+        else if (Gdx.input.isKeyJustPressed(Input.Keys.LEFT)) tryMove(-1, 0);
+        else if (Gdx.input.isKeyJustPressed(Input.Keys.RIGHT)) tryMove(1, 0);
     }
 
     private void tryMove(int dx, int dy) {
-        if (isMoving) return; // Segurança extra
+        if (isMoving) return;
 
         int nextLogicalX = game.playerGridX + dx;
         int nextLogicalY = game.playerGridY + dy;
 
-        // Checa limites do mapa
         if (nextLogicalX >= 0 && nextLogicalX < MyGdxGame.MAP_WIDTH_TILES &&
             nextLogicalY >= 0 && nextLogicalY < MyGdxGame.MAP_HEIGHT_TILES &&
-            game.mapData[MyGdxGame.MAP_HEIGHT_TILES - 1 - nextLogicalY][nextLogicalX] != 1) { // Checa se não é parede
-
-            // Inicia a animação
+            game.mapData[MyGdxGame.MAP_HEIGHT_TILES - 1 - nextLogicalY][nextLogicalX] != 1) {
             isMoving = true;
-            targetGridX = nextLogicalX; // Define o alvo lógico
+            targetGridX = nextLogicalX;
             targetGridY = nextLogicalY;
-            animationTimer = 0f;        // Reseta o timer da animação
-
-            // A posição lógica (game.playerGridX/Y) SÓ será atualizada ao final da animação.
+            animationTimer = 0f;
         }
     }
 
@@ -92,35 +125,24 @@ public class ExplorationScreen extends ScreenAdapter {
             animationTimer += delta;
             float progress = Math.min(1f, animationTimer / MOVEMENT_ANIMATION_SPEED);
 
-            // Posição inicial da animação (baseada na posição lógica atual do grid)
             float startScreenX = game.playerGridX * MyGdxGame.TILE_SIZE;
             float startScreenY = game.playerGridY * MyGdxGame.TILE_SIZE;
-
-            // Posição final da animação (baseada no targetGridX/Y)
             float targetScreenX = targetGridX * MyGdxGame.TILE_SIZE;
             float targetScreenY = targetGridY * MyGdxGame.TILE_SIZE;
 
-            // Interpolação linear para suavizar o movimento
-            // playerVisualX = startScreenX + (targetScreenX - startScreenX) * progress;
-            // playerVisualY = startScreenY + (targetScreenY - startScreenY) * progress;
-            // Usar uma interpolação mais suave (opcional, mas fica melhor)
             playerVisualX = Interpolation.sineOut.apply(startScreenX, targetScreenX, progress);
             playerVisualY = Interpolation.sineOut.apply(startScreenY, targetScreenY, progress);
 
-
             if (progress >= 1f) {
                 isMoving = false;
-                // Atualiza a posição lógica do jogador para a posição alvo
                 game.playerGridX = targetGridX;
                 game.playerGridY = targetGridY;
-
-                // Garante que a posição visual seja exatamente a do tile alvo
                 playerVisualX = targetGridX * MyGdxGame.TILE_SIZE;
                 playerVisualY = targetGridY * MyGdxGame.TILE_SIZE;
 
-                // Checa se encontrou o inimigo APÓS o movimento terminar
                 if (game.mapData[MyGdxGame.MAP_HEIGHT_TILES - 1 - game.playerGridY][game.playerGridX] == 2) {
                     System.out.println("Inimigo encontrado em: " + game.playerGridX + "," + game.playerGridY);
+                    // ... (lógica de combate)
                     game.enemyHP = 50;
                     game.enemyDefeated = false;
                     game.lastAnswerCorrect = false;
@@ -128,36 +150,44 @@ public class ExplorationScreen extends ScreenAdapter {
                 }
             }
         } else {
-            // Garante que a posição visual esteja sincronizada com a lógica quando não está movendo
             playerVisualX = game.playerGridX * MyGdxGame.TILE_SIZE;
             playerVisualY = game.playerGridY * MyGdxGame.TILE_SIZE;
         }
+        // Atualizar a câmera APÓS o movimento do jogador ser calculado
+        updateCameraPosition();
     }
 
 
     @Override
     public void show() {
-        Gdx.input.setInputProcessor(null); // Limpa qualquer input processor anterior
-        // Atualiza a posição visual para a posição lógica atual do jogador ao mostrar a tela
-        // Isso é importante se você voltar para esta tela e a posição do jogador mudou
+        Gdx.input.setInputProcessor(null);
+        // Sincronizar posição visual e lógica do jogador
         playerVisualX = game.playerGridX * MyGdxGame.TILE_SIZE;
         playerVisualY = game.playerGridY * MyGdxGame.TILE_SIZE;
         targetGridX = game.playerGridX;
         targetGridY = game.playerGridY;
-        isMoving = false; // Garante que não esteja em movimento ao mostrar a tela
+        isMoving = false;
+
+        // Atualizar a posição da câmera quando a tela é mostrada
+        updateCameraPosition();
 
         if (game.enemyDefeated && game.mapData[MyGdxGame.MAP_HEIGHT_TILES - 1 - game.enemyMapGridY][game.enemyMapGridX] == 2) {
-            game.mapData[MyGdxGame.MAP_HEIGHT_TILES - 1 - game.enemyMapGridY][game.enemyMapGridX] = 0;
-            // game.enemyDefeated = false; // Removido daqui, pois a flag enemyDefeated é resetada ao entrar em combate
+            // ... (lógica de remover inimigo)
+            int enemyArrayY = MyGdxGame.MAP_HEIGHT_TILES - 1 - game.enemyMapGridY;
+             if (enemyArrayY >= 0 && enemyArrayY < MyGdxGame.MAP_HEIGHT_TILES &&
+                game.enemyMapGridX >= 0 && game.enemyMapGridX < MyGdxGame.MAP_WIDTH_TILES &&
+                game.mapData[enemyArrayY][game.enemyMapGridX] == 2) {
+                game.mapData[enemyArrayY][game.enemyMapGridX] = 0;
+            }
         }
     }
 
     @Override
     public void render(float delta) {
-        handleInput(delta);       // Processa entrada do jogador
-        updatePlayerMovement(delta); // Atualiza a lógica de animação do movimento
+        handleInput(delta);
+        updatePlayerMovement(delta); // Isso agora também chama updateCameraPosition()
 
-        camera.update();
+        // camera.update(); // Já é chamado dentro de updateCameraPosition()
         game.batch.setProjectionMatrix(camera.combined);
 
         Gdx.gl.glClearColor(0.1f, 0.1f, 0.1f, 1);
@@ -165,42 +195,77 @@ public class ExplorationScreen extends ScreenAdapter {
 
         game.batch.begin();
 
+        float playerOffsetX = (MyGdxGame.TILE_SIZE - RENDERED_PLAYER_SIZE) / 2f;
+        float playerOffsetY = (MyGdxGame.TILE_SIZE - RENDERED_PLAYER_SIZE) / 2f;
+        float enemyIconOffsetX = (MyGdxGame.TILE_SIZE - RENDERED_ENEMY_ICON_SIZE) / 2f;
+        float enemyIconOffsetY = (MyGdxGame.TILE_SIZE - RENDERED_ENEMY_ICON_SIZE) / 2f;
+
         // Renderizar o mapa
-        for (int y = 0; y < MyGdxGame.MAP_HEIGHT_TILES; y++) {
-            for (int x = 0; x < MyGdxGame.MAP_WIDTH_TILES; x++) {
-                Texture toDraw = null;
-                int tileType = game.mapData[y][x];
-                float screenX = x * MyGdxGame.TILE_SIZE;
-                float screenY = (MyGdxGame.MAP_HEIGHT_TILES - 1 - y) * MyGdxGame.TILE_SIZE;
+        // Otimização simples: renderizar apenas tiles que podem estar visíveis
+        // Calcular a faixa de tiles visíveis com base na posição e tamanho da câmera/viewport
+        int startX = MathUtils.floor((camera.position.x - viewport.getWorldWidth() / 2f) / MyGdxGame.TILE_SIZE) -1; // -1 para margem
+        int endX = MathUtils.ceil((camera.position.x + viewport.getWorldWidth() / 2f) / MyGdxGame.TILE_SIZE) +1;   // +1 para margem
+        int startY_mapArray = MathUtils.floor((camera.position.y - viewport.getWorldHeight() / 2f) / MyGdxGame.TILE_SIZE) -1;
+        int endY_mapArray = MathUtils.ceil((camera.position.y + viewport.getWorldHeight() / 2f) / MyGdxGame.TILE_SIZE) +1;
 
-                if (tileType == 0) {
-                    toDraw = floorTexture;
-                } else if (tileType == 1) {
-                    toDraw = wallTexture;
-                } else if (tileType == 2) {
-                    game.batch.draw(floorTexture, screenX, screenY, MyGdxGame.TILE_SIZE, MyGdxGame.TILE_SIZE);
-                    toDraw = enemyMapIconTexture;
-                }
+        // Clamp para os limites do mapa
+        startX = Math.max(0, startX);
+        endX = Math.min(MyGdxGame.MAP_WIDTH_TILES, endX);
+        // Para o array mapData, as coordenadas Y são invertidas e precisamos traduzir
+        // as coordenadas Y visuais (screenY) para os índices do array mapData.
+        // startY_mapArray e endY_mapArray já são para coordenadas de tela (Y cresce pra cima)
+        // Então, ao iterar no mapData, precisamos converter.
 
-                if (toDraw != null) {
-                    game.batch.draw(toDraw, screenX, screenY, MyGdxGame.TILE_SIZE, MyGdxGame.TILE_SIZE);
+        for (int mapY_idx = 0; mapY_idx < MyGdxGame.MAP_HEIGHT_TILES; mapY_idx++) { // Itera sobre as linhas do array mapData
+            float screenTileY = (MyGdxGame.MAP_HEIGHT_TILES - 1 - mapY_idx) * MyGdxGame.TILE_SIZE; // Y na tela para esta linha do array
+            // Checa se esta linha de tiles está dentro da faixa vertical visível
+            if (screenTileY + MyGdxGame.TILE_SIZE < camera.position.y - viewport.getWorldHeight() / 2f ||
+                screenTileY > camera.position.y + viewport.getWorldHeight() / 2f) {
+                continue; // Pula esta linha se estiver fora da visão vertical
+            }
+
+            for (int mapX_idx = startX; mapX_idx < endX; mapX_idx++) { // Itera sobre as colunas visíveis
+                int tileType = game.mapData[mapY_idx][mapX_idx]; // mapData[linha_array][coluna_array]
+                float screenTileX = mapX_idx * MyGdxGame.TILE_SIZE;
+                // screenTileY já calculado acima
+
+                if (tileType == 1) { // Parede
+                    game.batch.draw(wallTexture, screenTileX, screenTileY, MyGdxGame.TILE_SIZE, MyGdxGame.TILE_SIZE);
+                } else { // Chão ou Inimigo
+                    game.batch.draw(floorTexture, screenTileX, screenTileY, MyGdxGame.TILE_SIZE, MyGdxGame.TILE_SIZE);
+                    if (tileType == 2) { // Inimigo no mapa
+                        game.batch.draw(enemyMapIconTexture,
+                                screenTileX + enemyIconOffsetX,
+                                screenTileY + enemyIconOffsetY,
+                                RENDERED_ENEMY_ICON_SIZE,
+                                RENDERED_ENEMY_ICON_SIZE);
+                    }
                 }
             }
         }
 
-        // Renderizar o jogador usando as coordenadas visuais
+
+        // Renderizar o jogador
         game.batch.draw(playerTexture,
-                playerVisualX, // Usar playerVisualX
-                playerVisualY, // Usar playerVisualY
-                MyGdxGame.TILE_SIZE, MyGdxGame.TILE_SIZE);
+                playerVisualX + playerOffsetX,
+                playerVisualY + playerOffsetY,
+                RENDERED_PLAYER_SIZE,
+                RENDERED_PLAYER_SIZE);
 
         game.batch.end();
     }
 
     @Override
     public void resize(int width, int height) {
-        viewport.update(width, height, true);
-        camera.position.set(viewport.getWorldWidth() / 2, viewport.getWorldHeight() / 2, 0);
+        // Atualiza o viewport, mas a câmera NÃO é centralizada no meio do viewport aqui.
+        // A câmera agora segue o jogador.
+        viewport.update(width, height, false); // O 'false' para não centralizar a câmera
+                                               // ou 'true' se quiser que o viewport tente manter o centro da câmera
+                                               // No nosso caso, já gerenciamos a posição da câmera.
+                                               // O importante é que o viewport.update atualize suas dimensões de tela.
+        // Se você usar 'true' em viewport.update(width, height, true) e a câmera não tiver sido
+        // movida ainda (ex: no primeiro frame), ela será centralizada no (0,0) do mundo do viewport.
+        // Como estamos chamando updateCameraPosition() no show e no render, está ok.
     }
 
     @Override
