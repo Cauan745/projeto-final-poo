@@ -10,6 +10,7 @@ import com.badlogic.gdx.math.Interpolation;
 import com.badlogic.gdx.math.MathUtils; // Importar MathUtils
 import com.badlogic.gdx.utils.viewport.FitViewport;
 import com.badlogic.gdx.utils.viewport.Viewport;
+import com.badlogic.gdx.graphics.Color;
 
 public class ExplorationScreen extends ScreenAdapter {
     final MyGdxGame game;
@@ -38,6 +39,10 @@ public class ExplorationScreen extends ScreenAdapter {
     public static final float VIEWPORT_HEIGHT_TILES = 8f; // Ex: 10 tiles de altura
 
     private boolean playerFacingRight = true;
+
+    // NOVO: Configurações da borda
+    private static final Color BORDER_COLOR = Color.BLACK; // Cor da borda
+    private static final float BORDER_THICKNESS = 1.5f;   // Espessura da borda em pixels (ajuste conforme necessário)
 
     public ExplorationScreen(final MyGdxGame game) {
         this.game = game;
@@ -194,26 +199,62 @@ public class ExplorationScreen extends ScreenAdapter {
 
     // Dentro do método render(float delta) em ExplorationScreen
 
+// Método auxiliar para desenhar a borda
+    private void drawWithBorder(Texture texture, float x, float y, float width, float height,
+                                boolean flipX, boolean flipY, Color borderColor, float borderThickness) {
+        Color originalColor = game.batch.getColor().cpy(); // Salva a cor original do batch
+        game.batch.setColor(borderColor); // Define a cor para a borda
+
+        int srcX = 0;
+        int srcY = 0;
+        int srcWidth = texture.getWidth();
+        int srcHeight = texture.getHeight();
+
+        // Desenha as "sombras" da borda
+        float[] offsets = {
+            -borderThickness, -borderThickness,  // Cima-esquerda
+             borderThickness, -borderThickness,  // Cima-direita
+            -borderThickness,  borderThickness,  // Baixo-esquerda
+             borderThickness,  borderThickness,  // Baixo-direita
+            -borderThickness, 0,                 // Esquerda
+             borderThickness, 0,                 // Direita
+             0, -borderThickness,                // Cima
+             0,  borderThickness                 // Baixo
+        };
+
+        for (int i = 0; i < offsets.length; i += 2) {
+            game.batch.draw(texture, x + offsets[i], y + offsets[i+1], width, height, srcX, srcY, srcWidth, srcHeight, flipX, flipY);
+        }
+
+        game.batch.setColor(originalColor); // Restaura a cor original
+        // Desenha o sprite principal por cima
+        game.batch.draw(texture, x, y, width, height, srcX, srcY, srcWidth, srcHeight, flipX, flipY);
+    }
+
 @Override
-public void render(float delta) {
-    handleInput(delta);
-    updatePlayerMovement(delta);
+    public void render(float delta) {
+        handleInput(delta);
+        updatePlayerMovement(delta);
 
-    game.batch.setProjectionMatrix(camera.combined);
+        game.batch.setProjectionMatrix(camera.combined);
 
-    Gdx.gl.glClearColor(0.1f, 0.1f, 0.1f, 1);
-    Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
+        Gdx.gl.glClearColor(0.1f, 0.1f, 0.1f, 1);
+        Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
 
-    game.batch.begin();
+        game.batch.begin();
 
-    float playerOffsetX = (MyGdxGame.TILE_SIZE - RENDERED_PLAYER_SIZE) / 2f;
-    float playerOffsetY = (MyGdxGame.TILE_SIZE - RENDERED_PLAYER_SIZE) / 2f;
-    // ... (código de renderização do mapa como antes) ...
+        float playerBaseX = playerVisualX; // Posição base do tile do jogador
+        float playerBaseY = playerVisualY;
+        float playerRenderOffsetX = (MyGdxGame.TILE_SIZE - RENDERED_PLAYER_SIZE) / 2f; // Offset para centralizar sprite menor
+        float playerRenderOffsetY = (MyGdxGame.TILE_SIZE - RENDERED_PLAYER_SIZE) / 2f;
+
+        float enemyIconRenderOffsetX = (MyGdxGame.TILE_SIZE - RENDERED_ENEMY_ICON_SIZE) / 2f;
+        float enemyIconRenderOffsetY = (MyGdxGame.TILE_SIZE - RENDERED_ENEMY_ICON_SIZE) / 2f;
+
 
         // Renderizar o mapa
-        // Otimização simples: renderizar apenas tiles que podem estar visíveis
-        int startX = MathUtils.floor((camera.position.x - viewport.getWorldWidth() / 2f) / MyGdxGame.TILE_SIZE) -1;
-        int endX = MathUtils.ceil((camera.position.x + viewport.getWorldWidth() / 2f) / MyGdxGame.TILE_SIZE) +1;
+        int startX = MathUtils.floor((camera.position.x - viewport.getWorldWidth() / 2f) / MyGdxGame.TILE_SIZE) - 1;
+        int endX = MathUtils.ceil((camera.position.x + viewport.getWorldWidth() / 2f) / MyGdxGame.TILE_SIZE) + 1;
 
         for (int mapY_idx = 0; mapY_idx < MyGdxGame.MAP_HEIGHT_TILES; mapY_idx++) {
             float screenTileY = (MyGdxGame.MAP_HEIGHT_TILES - 1 - mapY_idx) * MyGdxGame.TILE_SIZE;
@@ -223,7 +264,7 @@ public void render(float delta) {
             }
 
             for (int mapX_idx = startX; mapX_idx < endX; mapX_idx++) {
-                if (mapX_idx < 0 || mapX_idx >= MyGdxGame.MAP_WIDTH_TILES) continue; // Segurança extra para bounds
+                if (mapX_idx < 0 || mapX_idx >= MyGdxGame.MAP_WIDTH_TILES) continue;
 
                 int tileType = game.mapData[mapY_idx][mapX_idx];
                 float screenTileX = mapX_idx * MyGdxGame.TILE_SIZE;
@@ -233,43 +274,31 @@ public void render(float delta) {
                 } else {
                     game.batch.draw(floorTexture, screenTileX, screenTileY, MyGdxGame.TILE_SIZE, MyGdxGame.TILE_SIZE);
                     if (tileType == 2) {
-                        // Supondo que RENDERED_ENEMY_ICON_SIZE e offsets já foram definidos
-                        float enemyIconOffsetX = (MyGdxGame.TILE_SIZE - RENDERED_ENEMY_ICON_SIZE) / 2f;
-                        float enemyIconOffsetY = (MyGdxGame.TILE_SIZE - RENDERED_ENEMY_ICON_SIZE) / 2f;
-                        game.batch.draw(enemyMapIconTexture,
-                                screenTileX + enemyIconOffsetX,
-                                screenTileY + enemyIconOffsetY,
+                        // Desenhar ícone do inimigo com borda
+                        drawWithBorder(enemyMapIconTexture,
+                                screenTileX + enemyIconRenderOffsetX,
+                                screenTileY + enemyIconRenderOffsetY,
                                 RENDERED_ENEMY_ICON_SIZE,
-                                RENDERED_ENEMY_ICON_SIZE);
+                                RENDERED_ENEMY_ICON_SIZE,
+                                false, false, // Ícone do inimigo não vira (pode mudar se quiser)
+                                BORDER_COLOR, BORDER_THICKNESS);
                     }
                 }
             }
         }
 
-    // Renderizar o jogador
-    // A textura original (playerTexture) é usada como a fonte completa.
-    int srcX = 0;
-    int srcY = 0;
-    int srcWidth = playerTexture.getWidth();
-    int srcHeight = playerTexture.getHeight();
-    boolean flipX = !playerFacingRight; // Inverte se NÃO estiver virado para a direita
-    boolean flipY = false; // Não precisamos inverter verticalmente
+        // Renderizar o jogador com borda
+        boolean flipXPlayer = !playerFacingRight;
+        drawWithBorder(playerTexture,
+                playerBaseX + playerRenderOffsetX, // Posição final de renderização do sprite principal
+                playerBaseY + playerRenderOffsetY,
+                RENDERED_PLAYER_SIZE,
+                RENDERED_PLAYER_SIZE,
+                flipXPlayer, false,
+                BORDER_COLOR, BORDER_THICKNESS);
 
-    game.batch.draw(playerTexture,
-            playerVisualX + playerOffsetX,
-            playerVisualY + playerOffsetY,
-            RENDERED_PLAYER_SIZE,          // Largura de destino na tela
-            RENDERED_PLAYER_SIZE,          // Altura de destino na tela
-            srcX,                          // Ponto X de origem na textura
-            srcY,                          // Ponto Y de origem na textura
-            srcWidth,                      // Largura da região de origem na textura
-            srcHeight,                     // Altura da região de origem na textura
-            flipX,                         // Inverter horizontalmente?
-            flipY);                        // Inverter verticalmente?
-
-    game.batch.end();
-}
-
+        game.batch.end();
+    }
     @Override
     public void resize(int width, int height) {
         // Atualiza o viewport, mas a câmera NÃO é centralizada no meio do viewport aqui.

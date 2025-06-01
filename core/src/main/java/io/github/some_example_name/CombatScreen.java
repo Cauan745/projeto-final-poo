@@ -33,7 +33,9 @@ public class CombatScreen implements Screen {
     // private static final float COMBAT_PLAYER_HEIGHT = 70f;
     // private static final float COMBAT_ENEMY_WIDTH = 60f;
     // private static final float COMBAT_ENEMY_HEIGHT = 80f;
-
+    // NOVO: Configurações da borda (pode ser diferente da tela de exploração se quiser)
+    private static final Color BORDER_COLOR_COMBAT = Color.BLACK;
+    private static final float BORDER_THICKNESS_COMBAT = 2.0f; // Borda um pouco mais grossa para combate?
 
     public CombatScreen(final MyGdxGame game) {
         this.game = game;
@@ -100,39 +102,76 @@ public class CombatScreen implements Screen {
         }
     }
 
+    private void drawWithBorderCombat(Texture texture, float x, float y, float width, float height,
+                                     boolean flipX, boolean flipY, Color borderColor, float borderThickness) {
+        Color originalColor = game.batch.getColor().cpy();
+        game.batch.setColor(borderColor);
+
+        int srcX = 0;
+        int srcY = 0;
+        int srcWidth = texture.getWidth();
+        int srcHeight = texture.getHeight();
+
+        float[] offsets = {
+            -borderThickness, -borderThickness, borderThickness, -borderThickness,
+            -borderThickness, borderThickness, borderThickness, borderThickness,
+            -borderThickness, 0, borderThickness, 0,
+            0, -borderThickness, 0, borderThickness
+        };
+
+        for (int i = 0; i < offsets.length; i += 2) {
+            game.batch.draw(texture, x + offsets[i], y + offsets[i+1], width, height, srcX, srcY, srcWidth, srcHeight, flipX, flipY);
+        }
+
+        game.batch.setColor(originalColor);
+        game.batch.draw(texture, x, y, width, height, srcX, srcY, srcWidth, srcHeight, flipX, flipY);
+    }
+
     @Override
     public void render(float delta) {
         Gdx.gl.glClearColor(0.2f, 0.2f, 0.2f, 1);
         Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
 
-        float charactersXPos = 50; // Posição X base
+        float charactersXPos = 50; // Posição X base do jogador
+        float enemyXPos = Gdx.graphics.getWidth() - (enemyTexture.getWidth() * COMBAT_SPRITE_SCALE_FACTOR) - 50; // Inimigo à direita
+         // Se usar enemyXPos = charactersXPos * 5, pode sair da tela se a tela for pequena
 
-        // Calcular tamanhos de renderização
         float playerRenderWidth = playerTexture.getWidth() * COMBAT_SPRITE_SCALE_FACTOR;
         float playerRenderHeight = playerTexture.getHeight() * COMBAT_SPRITE_SCALE_FACTOR;
         float enemyRenderWidth = enemyTexture.getWidth() * COMBAT_SPRITE_SCALE_FACTOR;
         float enemyRenderHeight = enemyTexture.getHeight() * COMBAT_SPRITE_SCALE_FACTOR;
 
-        // Se você optou por tamanhos fixos, use-os diretamente:
-        // float playerRenderWidth = COMBAT_PLAYER_WIDTH;
-        // float playerRenderHeight = COMBAT_PLAYER_HEIGHT;
-        // etc.
+        // Para a tela de combate, assumimos que o jogador está sempre virado para o inimigo (direita)
+        // e o inimigo para o jogador (esquerda), ou você pode ter sprites específicos.
+        // Por simplicidade, vamos assumir que o player_topdown.png está para direita
+        // e o enemy.png está para esquerda por padrão.
+        boolean playerFlipX = false; // Assumindo que player_topdown.png olha para direita
+        boolean enemyFlipX = false;  // Assumindo que enemy.png olha para esquerda
 
-        // Desenhar sprites com os novos tamanhos
+        // Se o seu enemy.png olha para a direita, você faria:
+        // boolean enemyFlipX = true;
+
+
         game.batch.begin();
-        game.batch.draw(playerTexture,
+        // Desenhar jogador com borda
+        drawWithBorderCombat(playerTexture,
                 charactersXPos,
-                100, // Posição Y
-                playerRenderWidth,  // Largura de renderização
-                playerRenderHeight); // Altura de renderização
+                100,
+                playerRenderWidth,
+                playerRenderHeight,
+                playerFlipX, false, // Sem flip Y
+                BORDER_COLOR_COMBAT, BORDER_THICKNESS_COMBAT);
 
 
         if (!game.enemyDefeated) {
-            game.batch.draw(enemyTexture,
-                    charactersXPos * 5, // Posição X do inimigo
-                    100,               // Posição Y
-                    enemyRenderWidth,  // Largura de renderização
-                    enemyRenderHeight); // Altura de renderização
+            // Desenhar inimigo com borda
+            drawWithBorderCombat(enemyTexture,
+                    enemyXPos, // Usar enemyXPos calculado
+                    100,
+                    enemyRenderWidth,
+                    enemyRenderHeight,
+                    enemyFlipX, false, // Sem flip Y
+                    BORDER_COLOR_COMBAT, BORDER_THICKNESS_COMBAT);
         }
         game.batch.end();
 

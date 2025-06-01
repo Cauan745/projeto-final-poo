@@ -30,8 +30,8 @@ public class MyGdxGame extends Game {
     // Configurações do Mapa de Exploração
     public static final int TILE_SIZE = 32; // Tamanho de cada tile em pixels
     // NOVAS DIMENSÕES DO MAPA
-    public static final int MAP_WIDTH_TILES = 35; // Largura do mapa em tiles
-    public static final int MAP_HEIGHT_TILES = 25;  // Altura do mapa em tiles
+    public static final int MAP_WIDTH_TILES = 20; // Largura do mapa em tiles
+    public static final int MAP_HEIGHT_TILES = 8;  // Altura do mapa em tiles
 
     // Posição do Jogador no Grid do Mapa (inicial)
     public int playerGridX = 1; // Mantendo a posição inicial perto do canto
@@ -43,8 +43,8 @@ public class MyGdxGame extends Game {
 
     // Coordenadas do inimigo no mapa para remover após derrotado
     // Vamos colocar o inimigo em uma nova posição no mapa maior
-    public int enemyMapGridX = 15;
-    public int enemyMapGridY = 10; // Lembre-se que mapData[y][x], então no array será mapData[10][15] (se y cresce pra baixo no array)
+    public int enemyMapGridX = 6;
+    public int enemyMapGridY = 3; // Lembre-se que mapData[y][x], então no array será mapData[10][15] (se y cresce pra baixo no array)
                                    // Ou, se enemyMapGridY é a coordenada "visual" (y cresce pra cima),
                                    // a linha no array será MAP_HEIGHT_TILES - 1 - enemyMapGridY
 
