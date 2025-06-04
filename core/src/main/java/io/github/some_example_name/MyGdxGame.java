@@ -5,11 +5,13 @@ import com.badlogic.gdx.assets.AssetManager;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.BitmapFont;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
+import io.github.some_example_name.questions.Question;
 
 import java.io.File;
 // import com.badlogic.gdx.scenes.scene2d.ui.Skin; // Se for usar
 
 public class MyGdxGame extends Game {
+
     public SpriteBatch batch;
     public BitmapFont font;
     public AssetManager assetManager;
