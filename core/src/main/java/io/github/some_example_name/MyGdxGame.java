@@ -1,14 +1,22 @@
 package io.github.some_example_name;
+
 import com.badlogic.gdx.Game;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.assets.AssetManager;
+import com.badlogic.gdx.files.FileHandle;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.BitmapFont;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
+import com.badlogic.gdx.utils.Json;
+import com.badlogic.gdx.utils.JsonWriter;
 import io.github.some_example_name.questions.Question;
+import io.github.some_example_name.questions.QuestionData;
+import io.github.some_example_name.questions.QuestionList;
 
-import java.io.File;
-// import com.badlogic.gdx.scenes.scene2d.ui.Skin; // Se for usar
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Random;
+import java.util.stream.Collectors;
 
 public class MyGdxGame extends Game {
 
@@ -21,98 +29,166 @@ public class MyGdxGame extends Game {
     public CombatScreen combatScreen;
     public QuestionScreen questionScreen;
 
-    // Estado simples do jogo para MVP
+    // Estado do jogo
     public int playerHP = 100;
     public int enemyHP = 50;
     public boolean enemyDefeated = false;
-    public Question currentQuestion;
+    public Question currentQuestion; // Pergunta formatada para a tela
+    public QuestionData currentQuestionData; // Pergunta com dados de SRS
     public boolean lastAnswerCorrect = false;
     public boolean returnedFromQuestionScreenWithWrongAnswer = false;
 
-    // Configurações do Mapa de Exploração
-    public static final int TILE_SIZE = 32; // Tamanho de cada tile em pixels
-    // NOVAS DIMENSÕES DO MAPA
-    public static final int MAP_WIDTH_TILES = 20; // Largura do mapa em tiles
-    public static final int MAP_HEIGHT_TILES = 8;  // Altura do mapa em tiles
+    // --- Sistema de Perguntas e Repetição Espaçada ---
+    private List<QuestionData> allQuestions; // Lista de todas as perguntas em memória
+    private Random random;
+    // O caminho relativo para o arquivo de perguntas. Será usado tanto em 'internal' quanto em 'local'.
+    private final String QUESTIONS_FILE_PATH = "questions/perguntas.json";
+    // -------------------------------------------------
 
-    // Posição do Jogador no Grid do Mapa (inicial)
-    public int playerGridX = 1; // Mantendo a posição inicial perto do canto
-    public int playerGridY = 1; // Lembre-se que Y=0 é a linha de baixo no grid do jogador
-
-    // Dados do Mapa (0=chão, 1=parede, 2=inimigo)
-    // O array será mapData[MAP_HEIGHT_TILES][MAP_WIDTH_TILES]
+    // Configurações do Mapa
+    public static final int TILE_SIZE = 32;
+    public static final int MAP_WIDTH_TILES = 20;
+    public static final int MAP_HEIGHT_TILES = 8;
+    public int playerGridX = 1;
+    public int playerGridY = 1;
     public int[][] mapData = new int[MAP_HEIGHT_TILES][MAP_WIDTH_TILES];
-
-    // Coordenadas do inimigo no mapa para remover após derrotado
-    // Vamos colocar o inimigo em uma nova posição no mapa maior
     public int enemyMapGridX = 6;
-    public int enemyMapGridY = 3; // Lembre-se que mapData[y][x], então no array será mapData[10][15] (se y cresce pra baixo no array)
-                                   // Ou, se enemyMapGridY é a coordenada "visual" (y cresce pra cima),
-                                   // a linha no array será MAP_HEIGHT_TILES - 1 - enemyMapGridY
+    public int enemyMapGridY = 3;
 
-    public MyGdxGame() { // Construtor para inicializar o mapa
+    public MyGdxGame() {
         initializeMapData();
+        random = new Random();
     }
 
     private void initializeMapData() {
-        for (int y = 0; y < MAP_HEIGHT_TILES; y++) {
-            for (int x = 0; x < MAP_WIDTH_TILES; x++) {
-                if (y == 0 || y == MAP_HEIGHT_TILES - 1 || x == 0 || x == MAP_WIDTH_TILES - 1) {
-                    mapData[y][x] = 1; // Parede nas bordas
-                } else {
-                    mapData[y][x] = 0; // Chão no interior
-                }
-            }
-        }
-
-        // Adicionar algumas paredes internas para exemplo (opcional)
-        // Lembre-se: mapData[linha][coluna]
-        // Linha 5, colunas de 5 a 10
-        for (int x = 5; x <= 10; x++) {
-            if (x < MAP_WIDTH_TILES -1) mapData[5][x] = 1;
-        }
-        // Coluna 15, linhas de 8 a 12
-        for (int y = 8; y <= 12; y++) {
-             if (y < MAP_HEIGHT_TILES -1) mapData[y][15] = 1;
-        }
-
-        // Colocar o inimigo (2)
-        // A posição do inimigo no array mapData depende de como você interpreta enemyMapGridY.
-        // Se enemyMapGridY (e playerGridY) representam a linha no array (onde 0 é o topo), então:
-        // mapData[enemyMapGridY][enemyMapGridX] = 2;
-        // Se enemyMapGridY (e playerGridY) representam a coordenada visual Y (onde 0 é a base do mapa na tela),
-        // então a linha no array é invertida:
-        if (enemyMapGridY >= 0 && enemyMapGridY < MAP_HEIGHT_TILES &&
-            enemyMapGridX >= 0 && enemyMapGridX < MAP_WIDTH_TILES) {
-            // Usando a convenção atual do seu código onde playerGridY é a coordenada "visual" e o array mapData tem y invertido:
-            // A lógica em ExplorationScreen para desenhar e checar colisões usa:
-            // game.mapData[MyGdxGame.MAP_HEIGHT_TILES - 1 - nextY][nextX]
-            // Portanto, para definir o inimigo no mapData usando enemyMapGridX e enemyMapGridY como coordenadas visuais:
-            int enemyArrayY = MAP_HEIGHT_TILES - 1 - enemyMapGridY;
-            if (enemyArrayY >= 0 && enemyArrayY < MAP_HEIGHT_TILES) { // Checagem extra de bounds para enemyArrayY
-                 if (mapData[enemyArrayY][enemyMapGridX] == 0) { // Só coloca inimigo se for chão
-                    mapData[enemyArrayY][enemyMapGridX] = 2;
-                } else {
-                     System.err.println("Aviso: Posição do inimigo (" + enemyMapGridX + "," + enemyMapGridY + ") colide com parede. Inimigo não posicionado.");
-                     // Poderia tentar encontrar uma nova posição ou deixar sem inimigo
-                }
-            } else {
-                 System.err.println("Aviso: Coordenada Y do inimigo (" + enemyMapGridY + ") está fora dos limites do array após inversão.");
-            }
-
-        } else {
-            System.err.println("Aviso: Coordenadas X ou Y do inimigo estão fora dos limites do mapa.");
-        }
+        // Inicializa os dados do mapa (paredes, chão, etc.)
+        for (int y = 0; y < MAP_HEIGHT_TILES; y++) {for (int x = 0; x < MAP_WIDTH_TILES; x++) {if (y == 0 || y == MAP_HEIGHT_TILES - 1 || x == 0 || x == MAP_WIDTH_TILES - 1) {mapData[y][x] = 1;} else {mapData[y][x] = 0;}}}
+        for (int x = 5; x <= 10; x++) {if (x < MAP_WIDTH_TILES -1) mapData[5][x] = 1;}
+        for (int y = 8; y <= 12; y++) {if (y < MAP_HEIGHT_TILES -1) mapData[y][15] = 1;}
+        if (enemyMapGridY >= 0 && enemyMapGridY < MAP_HEIGHT_TILES && enemyMapGridX >= 0 && enemyMapGridX < MAP_WIDTH_TILES) {int enemyArrayY = MAP_HEIGHT_TILES - 1 - enemyMapGridY; if (enemyArrayY >= 0 && enemyArrayY < MAP_HEIGHT_TILES) {if (mapData[enemyArrayY][enemyMapGridX] == 0) {mapData[enemyArrayY][enemyMapGridX] = 2;} else {System.err.println("Aviso: Posição do inimigo (" + enemyMapGridX + "," + enemyMapGridY + ") colide com parede. Inimigo não posicionado.");}} else {System.err.println("Aviso: Coordenada Y do inimigo (" + enemyMapGridY + ") está fora dos limites do array após inversão.");}} else {System.err.println("Aviso: Coordenadas X ou Y do inimigo estão fora dos limites do mapa.");}
     }
 
 
+    /**
+     * Carrega as perguntas. Se for a primeira vez, copia o arquivo de 'assets' para 'local'.
+     * Em todas as execuções subsequentes, carrega diretamente do arquivo 'local'.
+     */
+    private void loadQuestions() {
+        Json json = new Json();
+        FileHandle localFile = Gdx.files.local(QUESTIONS_FILE_PATH);
+
+        if (!localFile.exists()) {
+            Gdx.app.log("QuestionLoader", "Arquivo de progresso não encontrado. Copiando do 'assets' para 'local'.");
+            Gdx.app.log("QuestionLoader", "O arquivo de save será criado em: " + localFile.file().getAbsolutePath());
+
+            // Pega o arquivo mestre da pasta de recursos (read-only)
+            FileHandle masterFile = Gdx.files.internal(QUESTIONS_FILE_PATH);
+            if (masterFile.exists()) {
+                // Copia o arquivo mestre para a pasta local (read/write)
+                masterFile.copyTo(localFile);
+            } else {
+                Gdx.app.error("QuestionLoader", "FATAL: Arquivo mestre 'assets/" + QUESTIONS_FILE_PATH + "' não foi encontrado!");
+                allQuestions = new ArrayList<>();
+                return;
+            }
+        }
+
+        // A partir daqui, sempre carregamos o arquivo da pasta 'local'
+        Gdx.app.log("QuestionLoader", "Carregando perguntas de: " + localFile.path());
+        QuestionList listContainer = json.fromJson(QuestionList.class, localFile);
+
+        if (listContainer != null && listContainer.perguntas != null) {
+            allQuestions = listContainer.perguntas;
+        } else {
+            Gdx.app.error("QuestionLoader", "Erro ao ler o arquivo de perguntas. Criando lista vazia.");
+            allQuestions = new ArrayList<>();
+        }
+        Gdx.app.log("QuestionLoader", "Total de " + allQuestions.size() + " perguntas em memória.");
+    }
+
+    /**
+     * Salva o estado atual da lista de perguntas (com o progresso da repetição espaçada)
+     * de volta para o arquivo na pasta 'local', sobrescrevendo-o.
+     */
+    private void saveQuestions() {
+        if (allQuestions == null || allQuestions.isEmpty()) {
+            return;
+        }
+        Json json = new Json();
+        json.setOutputType(JsonWriter.OutputType.json); // Formata o JSON para ser legível
+
+        QuestionList listToSave = new QuestionList();
+        listToSave.perguntas = new ArrayList<>(allQuestions);
+
+        FileHandle localFile = Gdx.files.local(QUESTIONS_FILE_PATH);
+        localFile.writeString(json.prettyPrint(listToSave), false); // 'false' para sobrescrever
+        Gdx.app.log("QuestionSaver", "Progresso salvo em: " + localFile.path());
+    }
+
+    /**
+     * Seleciona uma pergunta para o combate, priorizando as que estão "vencidas"
+     * de acordo com o sistema de repetição espaçada.
+     */
+    public void prepareNewQuestion() {
+        if (allQuestions == null || allQuestions.isEmpty()) {
+            // Cria uma pergunta de fallback para evitar que o jogo quebre
+            currentQuestionData = new QuestionData();
+            currentQuestionData.titulo = "Erro: Nenhuma pergunta disponível.";
+            currentQuestion = convertToDisplayQuestion(currentQuestionData);
+            return;
+        }
+
+        long currentTime = System.currentTimeMillis();
+
+        // Encontra todas as perguntas que estão "vencidas" para revisão
+        List<QuestionData> dueQuestions = allQuestions.stream()
+            .filter(q -> q.nextReviewTimestamp <= currentTime)
+            .collect(Collectors.toList());
+
+        if (!dueQuestions.isEmpty()) {
+            // Se há perguntas vencidas, sorteia uma delas
+            currentQuestionData = dueQuestions.get(random.nextInt(dueQuestions.size()));
+            Gdx.app.log("SRS", "Sorteada pergunta vencida: " + currentQuestionData.titulo);
+        } else {
+            // Se não há nenhuma vencida, sorteia qualquer uma (para o jogo não parar)
+            currentQuestionData = allQuestions.get(random.nextInt(allQuestions.size()));
+            Gdx.app.log("SRS", "Nenhuma pergunta vencida. Sorteada pergunta aleatória: " + currentQuestionData.titulo);
+        }
+
+        // Converte o objeto de dados para um objeto de exibição para a tela
+        currentQuestion = convertToDisplayQuestion(currentQuestionData);
+    }
+
+    /**
+     * Converte um objeto QuestionData (com dados de SRS) para um objeto Question (para a UI).
+     */
+    private Question convertToDisplayQuestion(QuestionData data) {
+        String[] options = new String[4];
+        if (data.opcoesResposta != null) {
+            options[0] = data.opcoesResposta.get("a");
+            options[1] = data.opcoesResposta.get("b");
+            options[2] = data.opcoesResposta.get("c");
+            options[3] = data.opcoesResposta.get("d");
+        }
+        int correctIndex = -1;
+        if (data.opcaoCorreta != null) {
+            switch (data.opcaoCorreta) {
+                case "a": correctIndex = 0; break;
+                case "b": correctIndex = 1; break;
+                case "c": correctIndex = 2; break;
+                case "d": correctIndex = 3; break;
+            }
+        }
+        return new Question(data.titulo, options, correctIndex);
+    }
+
     @Override
     public void create() {
-        // initializeMapData(); // Movido para o construtor para garantir que mapData exista antes que as telas o usem
         batch = new SpriteBatch();
         font = new BitmapFont();
         assetManager = new AssetManager();
 
+        // Carrega os assets gráficos do jogo
         assetManager.load("enemy.png", Texture.class);
         assetManager.load("player_topdown.png", Texture.class);
         assetManager.load("floor.png", Texture.class);
@@ -120,9 +196,10 @@ public class MyGdxGame extends Game {
         assetManager.load("enemy_map_icon.png", Texture.class);
         assetManager.finishLoading();
 
-        currentQuestion = new Question("Qual a capital da França?", new String[]{"Berlim", "Madri", "Paris"}, 2);
+        // Carrega as perguntas usando a lógica híbrida
+        loadQuestions();
 
-        // As telas são inicializadas após mapData ter sido preenchido
+        // Inicializa as telas do jogo
         explorationScreen = new ExplorationScreen(this);
         combatScreen = new CombatScreen(this);
         questionScreen = new QuestionScreen(this);
@@ -130,27 +207,12 @@ public class MyGdxGame extends Game {
         this.setScreen(explorationScreen);
     }
 
-    // ... (resto da classe MyGdxGame: métodos de cameFromQuestionScreen, render, dispose) ...
-    public boolean cameFromQuestionScreenWithError() {
-        return returnedFromQuestionScreenWithWrongAnswer;
-    }
-
-    public void setReturnedFromQuestionScreenWithWrongAnswer(boolean value) {
-        this.returnedFromQuestionScreenWithWrongAnswer = value;
-    }
-
-    public void clearCameFromQuestionScreenFlag() {
-        this.returnedFromQuestionScreenWithWrongAnswer = false;
-    }
-
-
-    @Override
-    public void render() {
-        super.render();
-    }
-
     @Override
     public void dispose() {
+        // Salva o progresso das perguntas ao fechar o jogo
+        saveQuestions();
+
+        // Libera os recursos
         batch.dispose();
         font.dispose();
         assetManager.dispose();
@@ -158,4 +220,9 @@ public class MyGdxGame extends Game {
         if (combatScreen != null) combatScreen.dispose();
         if (questionScreen != null) questionScreen.dispose();
     }
+
+    @Override public void render() {super.render();}
+    public boolean cameFromQuestionScreenWithError() {return returnedFromQuestionScreenWithWrongAnswer;}
+    public void setReturnedFromQuestionScreenWithWrongAnswer(boolean value) {this.returnedFromQuestionScreenWithWrongAnswer = value;}
+    public void clearCameFromQuestionScreenFlag() {this.returnedFromQuestionScreenWithWrongAnswer = false;}
 }

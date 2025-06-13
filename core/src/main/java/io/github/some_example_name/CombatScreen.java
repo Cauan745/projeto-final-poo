@@ -60,16 +60,17 @@ public class CombatScreen implements Screen {
         enemyHpLabel = new Label("Enemy HP: " + game.enemyHP, labelStyle);
 
 
-        TextButton attackButton = new TextButton("Atacar", textButtonStyle);
+       TextButton attackButton = new TextButton("Atacar", textButtonStyle);
         attackButton.addListener(new ClickListener() {
             @Override
             public void clicked(InputEvent event, float x, float y) {
                 if (!game.enemyDefeated) {
+                    // NOVO: Prepara uma pergunta aleatória antes de mudar de tela
+                    game.prepareNewQuestion();
                     game.setScreen(game.questionScreen);
                 }
             }
         });
-
         table.add(playerHpLabel).pad(10).row();
         table.add(enemyHpLabel).pad(10).row();
         table.add(attackButton).pad(20);

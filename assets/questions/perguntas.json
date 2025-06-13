@@ -1,0 +1,49 @@
+{
+"perguntas": [
+	{
+		"titulo": "Qual framework de desenvolvimento de jogos estamos usando?",
+		"opcoesResposta": {
+			"a": "Unity",
+			"b": "Godot",
+			"c": "LibGDX",
+			"d": "Unreal Engine"
+		},
+		"opcaoCorreta": "c",
+		"nextReviewTimestamp": 1749789282489
+	},
+	{
+		"titulo": "Em Java, qual palavra-chave é usada para criar uma subclasse?",
+		"opcoesResposta": {
+			"a": "extends",
+			"b": "implements",
+			"c": "inherits",
+			"d": "subclass"
+		},
+		"opcaoCorreta": "a",
+		"nextReviewTimestamp": 1749789250975
+	},
+	{
+		"titulo": "Qual o resultado de 2 + 2 * 2?",
+		"opcoesResposta": {
+			"a": "8",
+			"b": "6",
+			"c": "4",
+			"d": "10"
+		},
+		"opcaoCorreta": "b",
+		"nextReviewTimestamp": 1749875000817,
+		"intervalDays": 2
+	},
+	{
+		"titulo": "O que o método 'render(float delta)' faz no LibGDX?",
+		"opcoesResposta": {
+			"a": "Renderiza o primeiro frame",
+			"b": "É chamado continuamente para desenhar na tela",
+			"c": "Calcula a física do jogo",
+			"d": "Inicia o jogo"
+		},
+		"opcaoCorreta": "b",
+		"nextReviewTimestamp": 1749789294613
+	}
+]
+}
